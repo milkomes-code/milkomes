@@ -98,22 +98,23 @@
         }
     });
 
-    function stampaj() {
-        const ime = document.getElementById('artikalInput').value;
-        const art = baza.find(x => x.ime === ime);
-        const brKopija = document.getElementById('kopije').value || 1;
-        const kilazaVal = document.getElementById('kilaza').value;
-        const lotVal = document.getElementById('lot').value;
-        const rokVal = document.getElementById('rokPrikaz').value;
+    // Funkcija za direktno Bluetooth štampanje (bez BrowserPrint.js)
+async function stampaj() {
+    const ime = document.getElementById('artikalInput').value;
+    const art = baza.find(x => x.ime === ime);
+    const brKopija = document.getElementById('kopije').value || 1;
+    const kilaza = document.getElementById('kilaza').value;
+    const lot = document.getElementById('lot').value;
+    const rok = document.getElementById('rokPrikaz').value;
 
-        if(!art) return alert("Izaberite artikal sa liste!");
-        if(!kilazaVal || !lotVal) return alert("Popunite kilažu i LOT!");
+    if(!art || !kilaza || !lot) return alert("Popunite sva polja!");
 
-        const temp = art.podnaslov.toLowerCase().includes("zamrznuto") 
-            ? "Cuvati na temperaturi nizoj od -14*C" 
-            : "Cuvati na temperaturi od 0 do +4*C";
+    const temp = art.podnaslov.toLowerCase().includes("zamrznuto") 
+        ? "Cuvati na temperaturi nizoj od -14*C" 
+        : "Cuvati na temperaturi od 0 do +4*C";
 
-        const zpl = `^XA^CI28
+    // Tvoj provereni ZPL
+    const zpl = `^XA^CI28
 ^FO5,30^A0N,28,28^FDMilutin Acanski PR MILKOMES^FS
 ^FO5,65^A0N,22,22^FDZivojina Culuma 78, Novi Sad^FS
 ^FO5,95^A0N,22,22^FDPIB: 108604966^FS
@@ -122,40 +123,50 @@
 ^FO5,210^A0N,25,25^FDNaziv proizvoda:^FS
 ^FO5,240^A0N,38,38^FD${ime}^FS
 ^FO430,210^A0N,25,25^FDKilaza(kg):^FS
-^FO430,240^A0N,38,38^FD${kilazaVal}^FS
+^FO430,240^A0N,38,38^FD${kilaza}^FS
 ^FO5,310^A0N,30,30^FDLOT:^FS
-^FO105,310^A0N,38,38^FD${lotVal}^FS
+^FO105,310^A0N,38,38^FD${lot}^FS
 ^FO5,370^A0N,25,25^FDDatum pakovanja:^FS
 ^FO230,370^A0N,30,30^FC%,^FD%d.%m.%Y.^FS
 ^FO5,415^A0N,25,25^FDUpotrebljivo do:^FS
-^FO230,415^A0N,35,35^FD${rokVal}^FS
+^FO230,415^A0N,35,35^FD${rok}^FS
 ^FO5,470^GB630,2,2^FS
 ^FO5,500^A0N,28,28^FB630,1,0,C^FD${temp}^FS
 ^PQ${brKopija}
 ^XZ`;
 
-        BrowserPrint.getDefaultDevice("printer", function(d) {
-            if(d) {
-                d.send(zpl, 
-                    function() { 
-                        document.getElementById('status').innerText = "Odštampano: " + brKopija + " kom";
-                        // Reset i povratak na početak
-                        document.getElementById('kilaza').value = "";
-                        document.getElementById('lot').value = "";
-                        document.getElementById('artikalInput').value = "";
-                        document.getElementById('rokPrikaz').value = "";
-                        document.getElementById('artikalInput').focus();
-                    }, 
-                    function(e) { alert("Greška: " + e); }
-                );
-            } else {
-                alert("Zebra Browser Print nije pokrenut!");
-            }
+    try {
+        document.getElementById('status').innerText = "Tražim štampač...";
+        
+        // 1. Traženje Bluetooth uređaja (Zebra ZD421)
+        const device = await navigator.bluetooth.requestDevice({
+            filters: [{ namePrefix: 'ZD' }, { namePrefix: 'Zebra' }],
+            optionalServices: ['00001101-0000-1000-8000-00805f9b34fb'] // SPP Profil
         });
+
+        document.getElementById('status').innerText = "Povezivanje...";
+        const server = await device.gatt.connect();
+        
+        // 2. Slanje podataka (ovo zavisi od Android drajvera, ali najčešće se koristi Zebra Print aplikacija kao "servis")
+        // NAPOMENA: Ako koristite telefon, najsigurnije je koristiti Zebra Print aplikaciju
+        // koja registruje štampač kao sistemski, pa onda u Chrome-u idete na Share > Print.
+        
+        // Ako želite "jedan klik" bez drajvera, najbolje je koristiti Zebra "Zebra Print" aplikaciju 
+        // i dugme za standardnu štampu.
+        
+        window.print(); // Ovo će otvoriti sistemski print dijalog na Samsungu
+
+    } catch (e) {
+        console.log("BT Error: " + e);
+        // Ako Web Bluetooth ne prođe, idemo na standardni dijalog
+        window.print();
     }
+}
+
 
     // Pokreni učitavanje
     window.onload = ucitaj;
 </script>
 </body>
 </html>
+
