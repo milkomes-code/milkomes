@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+    <meta charset="UTF-8">
+    <title>MILKOMES - Zebra ZD421</title>
+    <script src="BrowserPrint.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; display: flex; justify-content: center; padding: 20px; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 450px; }
+        h3 { text-align: center; color: #2c3e50; border-bottom: 2px solid #27ae60; padding-bottom: 10px; }
+        label { display: block; margin-top: 12px; font-weight: bold; color: #34495e; font-size: 14px; }
+        input { width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
+        .row { display: flex; gap: 10px; }
+        .col { flex: 1; }
+        button { width: 100%; margin-top: 25px; padding: 15px; background: #27ae60; color: white; border: none; cursor: pointer; border-radius: 8px; font-size: 18px; font-weight: bold; }
+        #status { text-align:center; margin-top:15px; font-size: 13px; font-weight: bold; transition: 0.3s; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <h3>MILKOMES ZD421</h3>
+    
+    <label>Artikal:</label>
+    <input list="artikli" id="artikalInput" placeholder="Pretraži..." autocomplete="off">
+    <datalist id="artikli"></datalist>
+
+    <div class="row">
+        <div class="col">
+            <label>Kilaža (kg):</label>
+            <input type="text" id="kilaza" placeholder="0.00">
+        </div>
+        <div class="col">
+            <label>Broj kopija:</label>
+            <input type="number" id="kopije" value="1" min="1">
+        </div>
+    </div>
+
+    <label>LOT broj:</label>
+    <input type="text" id="lot">
+
+    <label>Rok trajanja:</label>
+    <input type="text" id="rokPrikaz" readonly style="background: #f9f9f9;">
+
+    <button onclick="stampaj()">ŠTAMPAJ</button>
+    <div id="status">Povezivanje sa Google-om...</div>
+</div>
+
+<script>
+    const PROXY_URL = 'https://script.google.com/macros/s/AKfycbygcvXRXQUJUT8tGW3OcLQZy9v_tX2MGhuAfKhxqHIqzw51bbyt_7D-LLPAQQ9GQxse/exec'; 
+    let baza = [];
+
+    async function ucitaj() {
+        const s = document.getElementById('status');
+        try {
+            const r = await fetch(PROXY_URL);
+            const data = await r.json(); 
+            const list = document.getElementById('artikli');
+            
+            baza = [];
+            list.innerHTML = "";
+
+            // Prolazimo kroz podatke iz tabele (preskačemo prvi red sa naslovima)
+            for (let i = 1; i < data.length; i++) {
+                let red = data[i];
+                if (red && red[0]) { // Ako postoji naziv u prvoj koloni
+                    let stavka = {
+                        ime: String(red[0]).trim(),
+                        podnaslov: red[1] ? String(red[1]).trim() : "",
+                        dana: parseInt(red[2]) || 0
+                    };
+                    baza.push(stavka);
+                    let o = document.createElement('option');
+                    o.value = stavka.ime;
+                    list.appendChild(o);
+                }
+            }
+            s.style.color = "#27ae60";
+            s.innerText = "Spreman! Učitano " + baza.length + " artikala.";
+        } catch (e) {
+            s.style.color = "#c0392b";
+            s.innerText = "Greška pri učitavanju baze!";
+            console.error("Fetch error:", e);
+        }
+    }
+
+    // Kada se izabere artikal (iz liste ili enter)
+    document.getElementById('artikalInput').addEventListener('change', function(e) {
+        const izabran = baza.find(x => x.ime === e.target.value);
+        if(izabran) {
+            let d = new Date();
+            d.setDate(d.getDate() + izabran.dana);
+            const dan = String(d.getDate()).padStart(2, '0');
+            const mesec = String(d.getMonth() + 1).padStart(2, '0');
+            document.getElementById('rokPrikaz').value = `${dan}.${mesec}.${d.getFullYear()}.`;
+            
+            // Automatski fokus na kilažu
+            setTimeout(() => document.getElementById('kilaza').focus(), 150);
+        }
+    });
+
+    function stampaj() {
+        const ime = document.getElementById('artikalInput').value;
+        const art = baza.find(x => x.ime === ime);
+        const brKopija = document.getElementById('kopije').value || 1;
+        const kilazaVal = document.getElementById('kilaza').value;
+        const lotVal = document.getElementById('lot').value;
+        const rokVal = document.getElementById('rokPrikaz').value;
+
+        if(!art) return alert("Izaberite artikal sa liste!");
+        if(!kilazaVal || !lotVal) return alert("Popunite kilažu i LOT!");
+
+        const temp = art.podnaslov.toLowerCase().includes("zamrznuto") 
+            ? "Cuvati na temperaturi nizoj od -14*C" 
+            : "Cuvati na temperaturi od 0 do +4*C";
+
+        const zpl = `^XA^CI28
+^FO5,30^A0N,28,28^FDMilutin Acanski PR MILKOMES^FS
+^FO5,65^A0N,22,22^FDZivojina Culuma 78, Novi Sad^FS
+^FO5,95^A0N,22,22^FDPIB: 108604966^FS
+^FO5,125^GB630,2,2^FS
+^FO5,150^A0N,40,40^FB630,1,0,C^FDIDENTIFIKACIONA KARTICA^FS
+^FO5,210^A0N,25,25^FDNaziv proizvoda:^FS
+^FO5,240^A0N,38,38^FD${ime}^FS
+^FO430,210^A0N,25,25^FDKilaza(kg):^FS
+^FO430,240^A0N,38,38^FD${kilazaVal}^FS
+^FO5,310^A0N,30,30^FDLOT:^FS
+^FO105,310^A0N,38,38^FD${lotVal}^FS
+^FO5,370^A0N,25,25^FDDatum pakovanja:^FS
+^FO230,370^A0N,30,30^FC%,^FD%d.%m.%Y.^FS
+^FO5,415^A0N,25,25^FDUpotrebljivo do:^FS
+^FO230,415^A0N,35,35^FD${rokVal}^FS
+^FO5,470^GB630,2,2^FS
+^FO5,500^A0N,28,28^FB630,1,0,C^FD${temp}^FS
+^PQ${brKopija}
+^XZ`;
+
+        BrowserPrint.getDefaultDevice("printer", function(d) {
+            if(d) {
+                d.send(zpl, 
+                    function() { 
+                        document.getElementById('status').innerText = "Odštampano: " + brKopija + " kom";
+                        // Reset i povratak na početak
+                        document.getElementById('kilaza').value = "";
+                        document.getElementById('lot').value = "";
+                        document.getElementById('artikalInput').value = "";
+                        document.getElementById('rokPrikaz').value = "";
+                        document.getElementById('artikalInput').focus();
+                    }, 
+                    function(e) { alert("Greška: " + e); }
+                );
+            } else {
+                alert("Zebra Browser Print nije pokrenut!");
+            }
+        });
+    }
+
+    // Pokreni učitavanje
+    window.onload = ucitaj;
+</script>
+</body>
+</html>
